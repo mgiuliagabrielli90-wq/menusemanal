@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="es" class="bg-slate-900">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Menú semanal</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Menú semanal">
+<meta name="theme-color" content="#0f172a">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399',
+            500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b', 950: '#022c22'
+          }
+        },
+        fontFamily: { sans: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'] }
+      }
+    }
+  }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* Layout: app móvil oscura con cabecera fija, selector de días, tarjetas por comida y barra de navegación inferior (Menú, Recetas, Compra) */
+  :root { color-scheme: dark; }
+  * { -webkit-tap-highlight-color: transparent; }
+  button { user-select: none; -webkit-user-select: none; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: #0f172a;
+    color: #f8fafc;
+    touch-action: manipulation;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    font-size: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-top: 4rem;
+    padding-bottom: 6rem;
+  }
+  .app-header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    height: calc(4rem + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(30, 41, 59, .8);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(30, 41, 59, .8);
+    padding: 8px max(24px, env(safe-area-inset-right, 0px)) max(0.75rem, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+  }
+  .modal-pad {
+    padding: max(1.25rem, env(safe-area-inset-top, 0px)) max(1.25rem, env(safe-area-inset-right, 0px)) max(1.25rem, env(safe-area-inset-bottom, 0px)) max(1.25rem, env(safe-area-inset-left, 0px));
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .active-tab { color: #10b981 !important; }
+  .active-tab .nav-icon { transform: translateY(-2px) scale(1.1); color: #10b981; }
+  .active-tab .nav-label { color: #10b981; }
+  .active-tab .nav-indicator { opacity: 1; transform: scaleX(1); }
+
+  .step-checkbox:checked + span { text-decoration: line-through; color: #64748b; }
+  .snap-x-mandatory { scroll-snap-type: x mandatory; }
+  .snap-center { scroll-snap-align: center; }
+  button:focus-visible, input:focus-visible, label:focus-within { outline: 2px solid #34d399; outline-offset: 2px; }
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    z-index: 60; max-width: calc(100% - 32px);
+  }
+</style>
+
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body class="antialiased">
+<header class="app-header">
+  <div class="flex items-center gap-3 min-w-0">
+    <div class="w-9 h-9 flex-shrink-0 bg-gradient-to-tr from-brand-600 to-emerald-400 rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+      <i data-lucide="chef-hat" class="w-5 h-5"></i>
+    </div>
+    <div class="min-w-0">
+      <h1 class="text-base font-extrabold text-white tracking-tight leading-none">Menú semanal</h1>
+      <span id="save-badge" class="text-[10px] font-semibold text-emerald-400 flex items-center gap-1 mt-1">
+        <i data-lucide="check-circle" class="w-3 h-3"></i> Guardado en este dispositivo
+      </span>
+    </div>
+  </div>
+
+  <div class="flex items-center bg-slate-800/90 rounded-full p-1 border border-slate-700/60 flex-shrink-0">
+    <span class="text-[10px] font-bold text-slate-400 px-2 flex items-center gap-1" title="Comensales">
+      <i data-lucide="users" class="w-3 h-3 text-brand-400"></i>
+    </span>
+    <div class="flex items-center gap-0.5">
+      <button onclick="setServings(1)" id="srv-1" aria-label="1 persona" class="srv-btn w-6 h-6 rounded-full text-xs font-bold transition-all text-slate-400">1</button>
+      <button onclick="setServings(2)" id="srv-2" aria-label="2 personas" class="srv-btn w-6 h-6 rounded-full text-xs font-bold transition-all bg-brand-500 text-white shadow-sm">2</button>
+      <button onclick="setServings(4)" id="srv-4" aria-label="4 personas" class="srv-btn w-6 h-6 rounded-full text-xs font-bold transition-all text-slate-400">4</button>
+    </div>
+    <button onclick="openInstallModal()" title="Añadir a la pantalla de inicio" aria-label="Añadir a la pantalla de inicio" class="ml-1 w-7 h-7 rounded-full bg-slate-700/80 text-brand-400 flex items-center justify-center hover:bg-slate-700 transition-all border border-slate-600/50">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+</header>
+
+<main class="flex-grow w-full max-w-lg mx-auto py-4 space-y-5">
+
+  <!-- ================= MENÚ SEMANAL ================= -->
+  <section id="section-menu" class="space-y-4">
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 snap-x-mandatory" role="tablist" aria-label="Días de la semana" id="day-tabs"></div>
+    <div id="mobile-day-display" class="space-y-4"></div>
+  </section>
+
+  <!-- ================= RECETAS ================= -->
+  <section id="section-recipes" class="hidden space-y-4">
+    <div class="relative">
+      <i data-lucide="search" class="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+      <input type="text" id="recipe-search" aria-label="Buscar receta o ingrediente" oninput="filterRecipes()" placeholder="Buscar receta o ingrediente..." class="w-full pl-11 pr-4 py-3 bg-slate-800/90 border border-slate-700/60 rounded-2xl text-xs font-medium text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all">
+    </div>
+    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1" id="day-filters"></div>
+    <div id="recipe-cards-container" class="space-y-4"></div>
+  </section>
+
+  <!-- ================= LISTA DE LA COMPRA ================= -->
+  <section id="section-grocery" class="hidden space-y-4">
+    <div class="bg-slate-800/80 rounded-3xl border border-slate-700/60 p-5 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between gap-3 border-b border-slate-700/60 pb-4">
+        <div class="min-w-0">
+          <h2 class="text-lg font-extrabold text-white flex items-center gap-2">
+            <i data-lucide="shopping-bag" class="w-5 h-5 text-brand-400"></i>
+            Lista de la compra
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Calculado para <span id="grocery-servings-count" class="font-bold text-brand-400">2 personas</span></p>
+        </div>
+        <button onclick="copyGroceryList()" class="flex-shrink-0 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-md shadow-brand-500/20 flex items-center gap-1.5">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          <span>Copiar</span>
+        </button>
+      </div>
+      <div id="grocery-list-container" class="space-y-4"></div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="bottom-nav" aria-label="Secciones">
+  <div class="max-w-md mx-auto flex items-center justify-around">
+    <button onclick="switchTab('menu')" id="nav-btn-menu" class="active-tab flex flex-col items-center gap-1 group py-1 relative">
+      <i data-lucide="calendar" class="nav-icon w-5 h-5 text-slate-400 transition-all duration-200"></i>
+      <span class="nav-label text-[11px] font-bold text-slate-400 transition-colors">Menú</span>
+      <span class="nav-indicator absolute -bottom-1 w-5 h-1 bg-brand-500 rounded-full opacity-0 transition-all duration-200"></span>
+    </button>
+    <button onclick="switchTab('recipes')" id="nav-btn-recipes" class="flex flex-col items-center gap-1 group py-1 relative">
+      <i data-lucide="book-open" class="nav-icon w-5 h-5 text-slate-400 transition-all duration-200"></i>
+      <span class="nav-label text-[11px] font-bold text-slate-400 transition-colors">Recetas</span>
+      <span class="nav-indicator absolute -bottom-1 w-5 h-1 bg-brand-500 rounded-full opacity-0 transition-all duration-200"></span>
+    </button>
+    <button onclick="switchTab('grocery')" id="nav-btn-grocery" class="flex flex-col items-center gap-1 group py-1 relative">
+      <i data-lucide="shopping-cart" class="nav-icon w-5 h-5 text-slate-400 transition-all duration-200"></i>
+      <span class="nav-label text-[11px] font-bold text-slate-400 transition-colors">Compra</span>
+      <span class="nav-indicator absolute -bottom-1 w-5 h-1 bg-brand-500 rounded-full opacity-0 transition-all duration-200"></span>
+    </button>
+  </div>
+</nav>
+
+<div id="toast" class="hidden bg-slate-100 text-slate-900 text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl" role="status"></div>
+
+<!-- Modo cocina -->
+<div id="cooking-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl hidden flex flex-col justify-between modal-pad" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+    <div class="space-y-0.5 min-w-0">
+      <span id="modal-meal-type" class="text-[10px] font-extrabold text-brand-400 uppercase tracking-widest bg-brand-950/80 px-2.5 py-0.5 rounded-md border border-brand-800/50">COMIDA</span>
+      <h3 id="modal-title" class="text-base font-extrabold text-white leading-tight mt-1">Título de la receta</h3>
+    </div>
+    <button onclick="closeModal()" aria-label="Cerrar" class="w-9 h-9 flex-shrink-0 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center">
+      <i data-lucide="x" class="w-5 h-5"></i>
+    </button>
+  </div>
+
+  <div class="my-auto space-y-6 py-4">
+    <div class="flex items-center justify-between text-xs font-semibold bg-slate-900/80 text-brand-300 p-3.5 rounded-2xl border border-slate-800">
+      <span class="flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4 text-brand-400"></i> <span id="modal-time">25 min</span></span>
+      <span class="flex items-center gap-1.5"><i data-lucide="users" class="w-4 h-4 text-brand-400"></i> <span id="modal-servings">2 pers.</span></span>
+    </div>
+    <div class="space-y-3">
+      <span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Paso actual</span>
+      <div id="modal-step-content" class="text-base sm:text-lg font-bold text-white bg-slate-900 p-6 rounded-2xl border border-slate-800 leading-relaxed shadow-xl min-h-[160px] flex items-center justify-center text-center"></div>
+    </div>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between text-xs font-bold text-slate-400">
+        <span>Paso <span id="modal-current-step" class="text-white">1</span> de <span id="modal-total-steps">4</span></span>
+      </div>
+      <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+        <div id="modal-progress-bar" class="bg-gradient-to-r from-brand-500 to-emerald-400 h-full rounded-full transition-all duration-300" style="width:25%"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3 pt-4 border-t border-slate-800">
+    <button onclick="prevStep()" id="btn-prev-step" class="flex-1 py-3.5 px-4 rounded-2xl border border-slate-700 text-xs font-bold text-slate-300 disabled:opacity-30">Anterior</button>
+    <button onclick="nextStep()" id="btn-next-step" class="flex-1 py-3.5 px-4 rounded-2xl bg-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-500/20">Siguiente</button>
+  </div>
+</div>
+
+<!-- Instalar en pantalla de inicio -->
+<div id="install-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex items-center justify-center modal-pad overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="install-title">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-5 space-y-5 shadow-2xl relative">
+    <button onclick="closeInstallModal()" aria-label="Cerrar" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+    <div class="flex items-center gap-3 border-b border-slate-800 pb-3 pr-10">
+      <div class="w-10 h-10 flex-shrink-0 bg-brand-500/20 text-brand-400 rounded-2xl flex items-center justify-center">
+        <i data-lucide="bookmark-plus" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 id="install-title" class="text-base font-extrabold text-white">Guardar en la pantalla de inicio</h3>
+        <p class="text-xs text-slate-400">Abre el menú con un toque desde el móvil</p>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 space-y-2">
+        <h4 class="text-xs font-extrabold text-white flex items-center gap-2"><i data-lucide="apple" class="w-4 h-4 text-slate-300"></i> iPhone / iPad (Safari)</h4>
+        <ol class="text-xs text-slate-300 space-y-2 list-decimal list-inside pl-1">
+          <li>Pulsa el icono de <strong class="text-brand-400">Compartir</strong> en la barra de Safari.</li>
+          <li>Desplázate y elige <strong class="text-brand-400">"Añadir a la pantalla de inicio"</strong>.</li>
+          <li>Pon el nombre que quieras y pulsa <strong class="text-brand-400">"Añadir"</strong>.</li>
+        </ol>
+      </div>
+      <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 space-y-2">
+        <h4 class="text-xs font-extrabold text-white flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i> Android (Chrome)</h4>
+        <ol class="text-xs text-slate-300 space-y-2 list-decimal list-inside pl-1">
+          <li>Pulsa los <strong class="text-brand-400">3 puntos</strong> arriba a la derecha.</li>
+          <li>Elige <strong class="text-brand-400">"Añadir a pantalla de inicio"</strong>.</li>
+          <li>Confirma con <strong>"Añadir"</strong>.</li>
+        </ol>
+      </div>
+    </div>
+    <button onclick="closeInstallModal()" class="w-full py-3 bg-brand-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-brand-500/20">Entendido</button>
+  </div>
+</div>
+
+<script>
+  const STORE_KEY = 'menuSemanalData';
+  const DAY_NAMES = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado' };
+  const DAY_SHORT = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb' };
+  const DAY_KEYS = Object.keys(DAY_NAMES);
+
+  let currentServings = 2;
+  let selectedDay = 'lunes';
+  let currentDayFilter = 'all';
+  let currentActiveTab = 'menu';
+  let modalState = { recipeId: null, currentStep: 0 };
+  let savedState = { checkedSteps: {}, checkedGrocery: {} };
+  let toastTimer = null;
+
+  /* Cantidades pensadas para 2 personas; se escalan con el selector. */
+  const recipesData = [
+    {
+      id: 'lunes-comida', day: 'lunes', meal: 'Comida',
+      title: 'Bol de quinoa, calabaza, granada y pollo', time: '40 min', category: 'Aves',
+      ingredients: [
+        { name: 'quinoa', amount: 120, unit: 'g', cat: 'Despensa' },
+        { name: 'pechuga de pollo', amount: 300, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'calabaza pelada', amount: 250, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'granada', amount: 0.5, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva virgen extra', amount: 2, unit: 'cdas.', cat: 'Despensa' },
+        { name: 'sal, pimienta y orégano', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Lava la quinoa en un colador fino. Cuécela en el doble de agua hirviendo con una pizca de sal durante 12-15 minutos y escúrrela.',
+        'Corta la calabaza en dados, sazónala y saltéala en una sartén con un hilo de aceite a fuego medio hasta que esté tierna y dorada.',
+        'Corta el pollo en tiras o dados, sazona con pimienta y orégano y dóralo en la sartén 5-6 minutos por lado.',
+        'Monta el bol con la quinoa de base, el pollo y la calabaza, y termina con los granos de granada.'
+      ]
+    },
+    {
+      id: 'lunes-cena', day: 'lunes', meal: 'Cena',
+      title: 'Alubias blancas, tomates cherry, merluza y limón', time: '25 min', category: 'Pescados',
+      ingredients: [
+        { name: 'lomos de merluza', amount: 300, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'alubias blancas cocidas', amount: 250, unit: 'g', cat: 'Despensa' },
+        { name: 'tomates cherry', amount: 150, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'limón (zumo y ralladura)', amount: 1, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'dientes de ajo', amount: 1, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva y perejil fresco', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Dora el ajo picado fino en una sartén amplia con un chorrito de aceite de oliva.',
+        'Añade los tomates cherry cortados por la mitad y saltea 3-4 minutos, hasta que empiecen a ablandarse.',
+        'Incorpora las alubias escurridas y el zumo de limón. Salpimienta y mezcla suavemente 2 minutos.',
+        'Sazona los lomos de merluza, colócalos sobre las alubias, tapa y cocina 6-8 minutos a fuego medio.',
+        'Sirve con la ralladura de limón y perejil fresco picado.'
+      ]
+    },
+    {
+      id: 'martes-comida', day: 'martes', meal: 'Comida',
+      title: 'Huevos con aguacate, pan tostado y espinacas', time: '15 min', category: 'Huevos y vegetarianos',
+      ingredients: [
+        { name: 'huevos', amount: 4, unit: 'unidades', cat: 'Lácteos y huevos' },
+        { name: 'aguacate maduro', amount: 2, unit: 'unidades', cat: 'Verduras y fruta' },
+        { name: 'rebanadas de pan', amount: 4, unit: 'unidades', cat: 'Panadería' },
+        { name: 'espinacas frescas', amount: 100, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'dientes de ajo', amount: 1, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva, sal y pimienta', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Saltea las espinacas en una sartén con un poco de aceite y el ajo laminado durante 2-3 minutos, hasta que reduzcan.',
+        'Tuesta el pan. Machaca el aguacate con una pizca de sal, pimienta y unas gotas de limón.',
+        'Cocina los huevos al gusto: a la plancha, escalfados (3 minutos) o revueltos.',
+        'Unta el aguacate sobre las tostadas, coloca las espinacas encima y termina con los huevos.'
+      ]
+    },
+    {
+      id: 'martes-cena', day: 'martes', meal: 'Cena',
+      title: 'Pollo con salsa de soja y miel, boniato y judías verdes', time: '35 min', category: 'Aves',
+      ingredients: [
+        { name: 'pechuga de pollo', amount: 350, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'boniato', amount: 250, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'judías verdes', amount: 200, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'salsa de soja', amount: 2, unit: 'cdas.', cat: 'Despensa' },
+        { name: 'miel', amount: 1, unit: 'cda.', cat: 'Despensa' },
+        { name: 'semillas de sésamo', amount: 1, unit: 'cdita.', cat: 'Despensa' }
+      ],
+      steps: [
+        'Pela el boniato y córtalo en dados. Saltéalo tapado a fuego medio-alto 12-15 minutos, o ablándalo 4 minutos en el microondas.',
+        'Cuece las judías verdes en agua con sal 6-8 minutos, hasta que estén al dente.',
+        'Mezcla la soja con la miel. Dora el pollo troceado en una sartén con aceite.',
+        'Añade el boniato y las judías al pollo, vierte la salsa y rehoga a fuego vivo 2 minutos para glasear. Espolvorea el sésamo.'
+      ]
+    },
+    {
+      id: 'miercoles-comida', day: 'miercoles', meal: 'Comida',
+      title: 'Trofie alla boscaiola con funghi, piselli, ricotta y prezzemolo', time: '25 min', category: 'Pastas',
+      ingredients: [
+        { name: 'pasta trofie', amount: 180, unit: 'g', cat: 'Despensa' },
+        { name: 'setas o champiñones', amount: 200, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'guisantes', amount: 100, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'queso ricotta', amount: 100, unit: 'g', cat: 'Lácteos y huevos' },
+        { name: 'cebolla o chalota', amount: 0.5, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'perejil fresco', amount: 'al gusto', unit: '', cat: 'Verduras y fruta' }
+      ],
+      steps: [
+        'Pica la cebolla y sofríela en una sartén con aceite. Añade las setas troceadas y los guisantes y cocina 8-10 minutos.',
+        'Hierve la pasta en abundante agua con sal el tiempo que indique el paquete.',
+        'Reserva medio cazo del agua de cocción antes de escurrir y mézclalo en un bol con la ricotta hasta lograr una crema fluida.',
+        'Une la pasta con la verdura y la crema de ricotta, y termina con abundante perejil picado.'
+      ]
+    },
+    {
+      id: 'miercoles-cena', day: 'miercoles', meal: 'Cena',
+      title: 'Col roja, salmón al horno, limón, quinoa y edamame', time: '30 min', category: 'Pescados',
+      ingredients: [
+        { name: 'lomo de salmón fresco', amount: 300, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'quinoa', amount: 100, unit: 'g', cat: 'Despensa' },
+        { name: 'edamame desgranado', amount: 150, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'col roja', amount: 150, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'limón', amount: 1, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva, sal y pimienta', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Precalienta el horno a 190 °C. Coloca el salmón en una bandeja con sal, pimienta, rodajas de limón y un hilo de aceite. Hornea 12-15 minutos.',
+        'Cuece la quinoa lavada 12 minutos y el edamame en agua hirviendo 3-5 minutos.',
+        'Saltea la col roja cortada en juliana fina con un toque de aceite y limón durante 5 minutos.',
+        'Sirve la quinoa de base con la col, el edamame y el lomo de salmón.'
+      ]
+    },
+    {
+      id: 'jueves-comida', day: 'jueves', meal: 'Comida',
+      title: 'Farfalle con brócoli y gambas', time: '20 min', category: 'Pastas',
+      ingredients: [
+        { name: 'pasta farfalle', amount: 180, unit: 'g', cat: 'Despensa' },
+        { name: 'ramilletes de brócoli', amount: 200, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'gambas o langostinos pelados', amount: 150, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'dientes de ajo', amount: 2, unit: 'unidades', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva y guindilla', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Cuece el brócoli en agua con sal 4 minutos. En la misma olla, añade la pasta y hierve todo junto.',
+        'En una sartén con abundante aceite, dora los ajos laminados y, si quieres, una guindilla.',
+        'Añade las gambas peladas y saltea a fuego fuerte 2 minutos.',
+        'Incorpora la pasta y el brócoli escurridos a la sartén, salpimienta y rehoga 2 minutos.'
+      ]
+    },
+    {
+      id: 'jueves-cena', day: 'jueves', meal: 'Cena',
+      title: 'Batata dulce con albóndigas de pollo y kale', time: '45 min', category: 'Aves',
+      ingredients: [
+        { name: 'carne picada de pollo', amount: 250, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'batata', amount: 250, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'hojas de kale', amount: 100, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'huevo', amount: 1, unit: 'unidad', cat: 'Lácteos y huevos' },
+        { name: 'pan rallado', amount: 1, unit: 'cda.', cat: 'Despensa' },
+        { name: 'ajo en polvo, sal y pimienta', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Mezcla la carne picada con el huevo, el pan rallado, la sal y las especias. Forma albóndigas pequeñas y dóralas en sartén, o hornéalas a 200 °C unos 15 minutos.',
+        'Pela la batata, córtala en cubos y ásala hasta que esté blanda.',
+        'Saltea el kale troceado en una sartén con aceite 3-4 minutos.',
+        'Sirve las albóndigas con la batata y el kale.'
+      ]
+    },
+    {
+      id: 'viernes-comida', day: 'viernes', meal: 'Comida',
+      title: 'Pasta con guisantes, salmón ahumado, ricotta y limón', time: '20 min', category: 'Pastas',
+      ingredients: [
+        { name: 'pasta corta (penne o fusilli)', amount: 180, unit: 'g', cat: 'Despensa' },
+        { name: 'salmón ahumado', amount: 100, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'guisantes', amount: 100, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'queso ricotta', amount: 80, unit: 'g', cat: 'Lácteos y huevos' },
+        { name: 'limón (zumo y ralladura)', amount: 1, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva y pimienta', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Cuece la pasta. Añade los guisantes a la misma olla los últimos 3 minutos.',
+        'Escurre y reserva un par de cucharadas del agua de cocción.',
+        'En un bol, mezcla la ricotta con el zumo de limón y un poco del agua caliente.',
+        'Añade la pasta a la crema, mezcla y termina con el salmón ahumado en tiras y la ralladura de limón.'
+      ]
+    },
+    {
+      id: 'viernes-cena', day: 'viernes', meal: 'Cena',
+      title: 'Pollo al cúrcuma con brócoli y lentejas', time: '25 min', category: 'Aves',
+      ingredients: [
+        { name: 'pechuga de pollo', amount: 300, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'lentejas cocidas en conserva', amount: 200, unit: 'g', cat: 'Despensa' },
+        { name: 'brócoli', amount: 150, unit: 'g', cat: 'Verduras y fruta' },
+        { name: 'cúrcuma en polvo', amount: 1, unit: 'cdita.', cat: 'Despensa' },
+        { name: 'comino en polvo', amount: 0.5, unit: 'cdita.', cat: 'Despensa' },
+        { name: 'aceite de oliva y sal', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Marina los dados de pollo con cúrcuma, comino, sal, pimienta y un hilo de aceite.',
+        'Cuece el brócoli al vapor, o en una sartén tapada con un poco de agua, 5 minutos.',
+        'Saltea el pollo marinado hasta que esté bien dorado.',
+        'Añade las lentejas lavadas y el brócoli a la sartén y calienta 2 minutos.'
+      ]
+    },
+    {
+      id: 'sabado-comida', day: 'sabado', meal: 'Comida',
+      title: 'Pimiento rojo asado, atún bonito, aceitunas negras y garbanzos', time: '10 min', category: 'Legumbres y ensaladas',
+      ingredients: [
+        { name: 'garbanzos cocidos', amount: 400, unit: 'g', cat: 'Despensa' },
+        { name: 'pimiento rojo asado en tiras', amount: 150, unit: 'g', cat: 'Despensa' },
+        { name: 'atún bonito del norte', amount: 150, unit: 'g', cat: 'Carnes y pescado' },
+        { name: 'aceitunas negras sin hueso', amount: 50, unit: 'g', cat: 'Despensa' },
+        { name: 'cebolla morada', amount: 0.5, unit: 'unidad', cat: 'Verduras y fruta' },
+        { name: 'aceite de oliva virgen extra y vinagre', amount: 'al gusto', unit: '', cat: 'Despensa' }
+      ],
+      steps: [
+        'Lava y escurre bien los garbanzos cocidos.',
+        'Mezcla en un bol grande los garbanzos con el pimiento rojo asado, la cebolla picada y las aceitunas negras.',
+        'Coloca el atún bonito desmigado por encima.',
+        'Aliña con aceite de oliva virgen extra, vinagre, sal y pimienta al gusto.'
+      ]
+    }
+  ];
+
+  /* ---------- utilidades ---------- */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function icons() { if (window.lucide) window.lucide.createIcons(); }
+  function fmt(n) {
+    const whole = Math.floor(n + 1e-9);
+    const frac = n - whole;
+    const marks = [[0, ''], [0.25, '¼'], [0.5, '½'], [0.75, '¾'], [1, '']];
+    for (const [v, s] of marks) {
+      if (Math.abs(frac - v) < 0.06) {
+        const w = v === 1 ? whole + 1 : whole;
+        if (s && w === 0) return s;
+        return String(w || (s ? '' : 0)) + s;
+      }
+    }
+    return (Math.round(n * 10) / 10).toString().replace('.', ',');
+  }
+  function amountText(ing, mult) {
+    return typeof ing.amount === 'number' ? fmt(ing.amount * mult) : ing.amount;
+  }
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.add('hidden'), 2600);
+  }
+
+  /* ---------- guardado local ---------- */
+  function setBadge(ok) {
+    const badge = document.getElementById('save-badge');
+    if (!badge) return;
+    if (ok) {
+      badge.className = 'text-[10px] font-semibold text-emerald-400 flex items-center gap-1 mt-1';
+      badge.innerHTML = '<i data-lucide="check-circle" class="w-3 h-3"></i> Guardado en este dispositivo';
+    } else {
+      badge.className = 'text-[10px] font-semibold text-amber-400 flex items-center gap-1 mt-1';
+      badge.innerHTML = '<i data-lucide="alert-triangle" class="w-3 h-3"></i> No se pudo guardar';
+    }
+    icons();
+  }
+  function saveState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        servings: currentServings,
+        checkedSteps: savedState.checkedSteps,
+        checkedGrocery: savedState.checkedGrocery
+      }));
+      setBadge(true);
+    } catch (e) { setBadge(false); }
+  }
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if ([1, 2, 4].includes(Number(d.servings))) currentServings = Number(d.servings);
+      if (d.checkedSteps && typeof d.checkedSteps === 'object') savedState.checkedSteps = d.checkedSteps;
+      if (d.checkedGrocery && typeof d.checkedGrocery === 'object') savedState.checkedGrocery = d.checkedGrocery;
+    } catch (e) { /* sin datos guardados */ }
+  }
+
+  /* ---------- navegación ---------- */
+  function switchTab(tab) {
+    currentActiveTab = tab;
+    ['menu', 'recipes', 'grocery'].forEach(b => {
+      document.getElementById('nav-btn-' + b).classList.toggle('active-tab', b === tab);
+      document.getElementById('section-' + b).classList.toggle('hidden', b !== tab);
+    });
+    if (tab === 'grocery') renderGroceryList();
+    window.scrollTo(0, 0);
+    icons();
+  }
+
+  function updateServingsUI(num) {
+    document.querySelectorAll('.srv-btn').forEach(btn => {
+      btn.className = 'srv-btn w-6 h-6 rounded-full text-xs font-bold transition-all text-slate-400';
+    });
+    const active = document.getElementById('srv-' + num);
+    if (active) active.className = 'srv-btn w-6 h-6 rounded-full text-xs font-bold transition-all bg-brand-500 text-white shadow-sm';
+  }
+  function setServings(num) {
+    currentServings = num;
+    updateServingsUI(num);
+    renderDayCard(selectedDay);
+    filterRecipes();
+    if (currentActiveTab === 'grocery') renderGroceryList();
+    saveState();
+  }
+
+  /* ---------- menú ---------- */
+  const TAB_ON = 'day-tab-btn snap-center flex-shrink-0 px-4 py-2.5 rounded-2xl bg-brand-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-brand-500/20 transition-all';
+  const TAB_OFF = 'day-tab-btn snap-center flex-shrink-0 px-4 py-2.5 rounded-2xl bg-slate-800/80 text-slate-400 border border-slate-700/50 font-bold text-xs flex items-center gap-1.5 transition-all';
+
+  function buildDayTabs() {
+    const wrap = document.getElementById('day-tabs');
+    wrap.innerHTML = DAY_KEYS.map(k =>
+      `<button role="tab" onclick="selectDayCard('${k}')" id="day-tab-${k}" class="${k === selectedDay ? TAB_ON : TAB_OFF}"><span>${DAY_NAMES[k]}</span></button>`
+    ).join('');
+  }
+  function selectDayCard(dayKey) {
+    selectedDay = dayKey;
+    document.querySelectorAll('.day-tab-btn').forEach(btn => { btn.className = TAB_OFF; btn.setAttribute('aria-selected', 'false'); });
+    const active = document.getElementById('day-tab-' + dayKey);
+    if (active) { active.className = TAB_ON; active.setAttribute('aria-selected', 'true'); }
+    renderDayCard(dayKey);
+  }
+
+  function mealCard(r, tone) {
+    const badge = tone === 'brand'
+      ? 'text-brand-300 bg-brand-950/80 border-brand-800/50'
+      : 'text-indigo-300 bg-indigo-950/80 border-indigo-800/50';
+    const clock = tone === 'brand' ? 'text-brand-400' : 'text-indigo-400';
+    return `
+      <div onclick="openRecipe('${r.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRecipe('${r.id}')}" class="p-4 rounded-2xl bg-slate-900/90 border border-slate-700/80 active:scale-[0.98] transition-all cursor-pointer">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md border ${badge}">${r.meal}</span>
+          <span class="text-xs text-slate-400 flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5 ${clock}"></i> ${r.time}</span>
+        </div>
+        <h3 class="text-sm font-bold text-white leading-snug">${esc(r.title)}</h3>
+      </div>`;
+  }
+
+  function renderDayCard(dayKey) {
+    const display = document.getElementById('mobile-day-display');
+    const comida = recipesData.find(r => r.day === dayKey && r.meal === 'Comida');
+    const cena = recipesData.find(r => r.day === dayKey && r.meal === 'Cena');
+    const count = [comida, cena].filter(Boolean).length;
+
+    let html = `
+      <div class="bg-slate-800/80 rounded-3xl border border-slate-700/60 p-5 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+          <h2 class="text-xl font-extrabold text-white flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-brand-400"></span>
+            ${DAY_NAMES[dayKey]}
+          </h2>
+          <span class="text-[10px] font-bold text-brand-400 bg-brand-950/80 px-2.5 py-1 rounded-full border border-brand-800/50">${count} ${count === 1 ? 'plato' : 'platos'}</span>
+        </div>
+        <div class="space-y-3">`;
+    if (comida) html += mealCard(comida, 'brand');
+    html += cena ? mealCard(cena, 'indigo') : `
+          <div class="p-4 rounded-2xl bg-slate-900/40 border border-dashed border-slate-700 text-center text-slate-500 text-xs italic">Cena libre</div>`;
+    html += '</div></div>';
+    display.innerHTML = html;
+    icons();
+  }
+
+  /* ---------- recetas ---------- */
+  function renderRecipes(recipes) {
+    const container = document.getElementById('recipe-cards-container');
+    if (recipes.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-12 bg-slate-800/80 rounded-3xl border border-slate-700/60 p-6 space-y-2">
+          <i data-lucide="utensils-crossed" class="w-8 h-8 text-slate-500 mx-auto"></i>
+          <p class="text-slate-300 font-bold text-xs">No hay recetas que coincidan con la búsqueda.</p>
+        </div>`;
+      icons();
+      return;
+    }
+    const mult = currentServings / 2;
+    container.innerHTML = recipes.map(recipe => {
+      const isComida = recipe.meal === 'Comida';
+      const badgeColor = isComida ? 'bg-brand-950/80 text-brand-300 border-brand-800/50' : 'bg-indigo-950/80 text-indigo-300 border-indigo-800/50';
+      const ingHTML = recipe.ingredients.map(ing => `
+        <li class="flex items-center justify-between gap-3 text-xs text-slate-300 py-1.5 border-b border-slate-700/40 last:border-0">
+          <span class="flex items-center gap-2 min-w-0"><span class="w-1.5 h-1.5 flex-shrink-0 rounded-full bg-brand-400"></span><span>${esc(ing.name)}</span></span>
+          <span class="font-bold text-white bg-slate-900 px-2 py-0.5 rounded-md text-[11px] flex-shrink-0">${esc(amountText(ing, mult))} ${esc(ing.unit)}</span>
+        </li>`).join('');
+      const stepsHTML = recipe.steps.map((step, idx) => {
+        const checked = savedState.checkedSteps[recipe.id + '_' + idx] ? 'checked' : '';
+        return `
+        <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-900/70 border border-slate-700/50 cursor-pointer active:scale-[0.99] transition-all">
+          <input type="checkbox" ${checked} data-rid="${recipe.id}" data-idx="${idx}" class="step-checkbox mt-0.5 rounded text-brand-500 w-4 h-4 bg-slate-800 border-slate-600">
+          <span class="text-xs text-slate-300 leading-relaxed"><strong class="text-white">Paso ${idx + 1}:</strong> ${esc(step)}</span>
+        </label>`;
+      }).join('');
+      return `
+      <div id="card-${recipe.id}" class="bg-slate-800/80 rounded-3xl border border-slate-700/60 p-5 space-y-4 shadow-xl scroll-mt-20">
+        <div class="space-y-2 border-b border-slate-700/60 pb-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border ${badgeColor}">${DAY_NAMES[recipe.day]} · ${recipe.meal}</span>
+            <span class="text-xs text-slate-400 flex items-center gap-1 font-medium"><i data-lucide="clock" class="w-3.5 h-3.5 text-brand-400"></i> ${recipe.time}</span>
+          </div>
+          <h3 class="text-lg font-extrabold text-white leading-tight">${esc(recipe.title)}</h3>
+        </div>
+        <button onclick="startCookingModal('${recipe.id}')" class="w-full py-3 bg-gradient-to-r from-brand-500 to-emerald-600 text-white font-bold text-xs rounded-2xl shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+          <i data-lucide="play" class="w-4 h-4 fill-white"></i><span>Modo cocina paso a paso</span>
+        </button>
+        <div class="space-y-3 pt-1">
+          <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/40 space-y-2">
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-brand-400"></i> Ingredientes</h4>
+            <ul class="space-y-0.5">${ingHTML}</ul>
+          </div>
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="list-checks" class="w-3.5 h-3.5 text-brand-400"></i> Preparación</h4>
+            <div class="space-y-2">${stepsHTML}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    icons();
+  }
+
+  function openRecipe(id) {
+    switchTab('recipes');
+    currentDayFilter = 'all';
+    document.getElementById('recipe-search').value = '';
+    buildDayFilters();
+    filterRecipes();
+    setTimeout(() => {
+      const card = document.getElementById('card-' + id);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  function filterRecipes() {
+    const q = document.getElementById('recipe-search').value.toLowerCase().trim();
+    renderRecipes(recipesData.filter(r => {
+      const dayOk = currentDayFilter === 'all' || r.day === currentDayFilter;
+      const qOk = !q || r.title.toLowerCase().includes(q) ||
+        r.ingredients.some(i => i.name.toLowerCase().includes(q)) ||
+        r.category.toLowerCase().includes(q);
+      return dayOk && qOk;
+    }));
+  }
+
+  const FILTER_ON = 'day-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-brand-500 text-white shadow-sm';
+  const FILTER_OFF = 'day-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700/50';
+  function buildDayFilters() {
+    const wrap = document.getElementById('day-filters');
+    const items = [['all', 'Todos']].concat(DAY_KEYS.map(k => [k, DAY_SHORT[k]]));
+    wrap.innerHTML = items.map(([k, label]) =>
+      `<button onclick="filterDay('${k}')" class="${k === currentDayFilter ? FILTER_ON : FILTER_OFF}">${label}</button>`).join('');
+  }
+  function filterDay(day) {
+    currentDayFilter = day;
+    buildDayFilters();
+    filterRecipes();
+  }
+
+  /* ---------- lista de la compra ---------- */
+  function buildGrocery() {
+    const cats = {};
+    const mult = currentServings / 2;
+    recipesData.forEach(recipe => {
+      recipe.ingredients.forEach(ing => {
+        if (!cats[ing.cat]) cats[ing.cat] = [];
+        const existing = cats[ing.cat].find(i => i.name.toLowerCase() === ing.name.toLowerCase() && i.unit === ing.unit);
+        if (existing && typeof ing.amount === 'number' && typeof existing.amount === 'number') {
+          existing.amount += ing.amount * mult;
+        } else if (!existing) {
+          cats[ing.cat].push({ name: ing.name, unit: ing.unit, amount: typeof ing.amount === 'number' ? ing.amount * mult : ing.amount });
+        }
+      });
+    });
+    return cats;
+  }
+
+  function renderGroceryList() {
+    const container = document.getElementById('grocery-list-container');
+    document.getElementById('grocery-servings-count').textContent = currentServings + (currentServings === 1 ? ' persona' : ' personas');
+    const cats = buildGrocery();
+    container.innerHTML = Object.entries(cats).map(([catName, items]) => {
+      const rows = items.map(item => {
+        const amt = typeof item.amount === 'number' ? fmt(item.amount) : item.amount;
+        const checked = savedState.checkedGrocery[item.name] ? 'checked' : '';
+        return `
+          <label class="flex items-center justify-between gap-3 text-xs text-slate-300 py-1.5 cursor-pointer border-b border-slate-800/80 last:border-0">
+            <span class="flex items-center gap-2 min-w-0">
+              <input type="checkbox" ${checked} data-gname="${esc(item.name)}" class="g-check rounded text-brand-500 w-4 h-4 flex-shrink-0 bg-slate-800 border-slate-600">
+              <span class="g-name">${esc(item.name)}</span>
+            </span>
+            <span class="font-bold text-white bg-slate-800 px-2 py-0.5 rounded-md text-[10px] flex-shrink-0">${esc(amt)} ${esc(item.unit)}</span>
+          </label>`;
+      }).join('');
+      return `
+        <div class="bg-slate-900/60 rounded-2xl p-4 border border-slate-700/50 space-y-2">
+          <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider pb-1 border-b border-slate-800 flex items-center justify-between">
+            <span>${esc(catName)}</span>
+            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-semibold">${items.length}</span>
+          </h4>
+          <div class="space-y-0.5">${rows}</div>
+        </div>`;
+    }).join('');
+  }
+
+  function groceryText() {
+    let text = 'LISTA DE LA COMPRA (' + currentServings + ' personas)\n\n';
+    Object.entries(buildGrocery()).forEach(([catName, items]) => {
+      text += '[ ' + catName.toUpperCase() + ' ]\n';
+      items.forEach(i => {
+        const amt = typeof i.amount === 'number' ? fmt(i.amount) : i.amount;
+        text += '- ' + i.name + ': ' + amt + ' ' + i.unit + '\n';
+      });
+      text += '\n';
+    });
+    return text.trim();
+  }
+
+  function copyGroceryList() {
+    const text = groceryText();
+    const fallback = () => {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.focus();
+      area.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      area.remove();
+      showToast(ok ? 'Lista copiada' : 'No se pudo copiar la lista');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showToast('Lista copiada')).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  /* ---------- modo cocina ---------- */
+  function startCookingModal(recipeId) {
+    const recipe = recipesData.find(r => r.id === recipeId);
+    if (!recipe) return;
+    modalState = { recipeId, currentStep: 0 };
+    document.getElementById('modal-title').textContent = recipe.title;
+    document.getElementById('modal-meal-type').textContent = DAY_NAMES[recipe.day] + ' · ' + recipe.meal;
+    document.getElementById('modal-time').textContent = recipe.time;
+    document.getElementById('modal-servings').textContent = currentServings + ' pers.';
+    document.getElementById('modal-total-steps').textContent = recipe.steps.length;
+    updateModalStep();
+    document.getElementById('cooking-modal').classList.remove('hidden');
+  }
+  function updateModalStep() {
+    const recipe = recipesData.find(r => r.id === modalState.recipeId);
+    if (!recipe) return;
+    document.getElementById('modal-step-content').textContent = recipe.steps[modalState.currentStep];
+    document.getElementById('modal-current-step').textContent = modalState.currentStep + 1;
+    document.getElementById('modal-progress-bar').style.width = ((modalState.currentStep + 1) / recipe.steps.length * 100) + '%';
+    document.getElementById('btn-prev-step').disabled = modalState.currentStep === 0;
+    const nextBtn = document.getElementById('btn-next-step');
+    if (modalState.currentStep === recipe.steps.length - 1) {
+      nextBtn.textContent = 'Finalizar';
+      nextBtn.className = 'flex-1 py-3.5 px-4 rounded-2xl bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20';
+    } else {
+      nextBtn.textContent = 'Siguiente';
+      nextBtn.className = 'flex-1 py-3.5 px-4 rounded-2xl bg-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-500/20';
+    }
+  }
+  function prevStep() { if (modalState.currentStep > 0) { modalState.currentStep--; updateModalStep(); } }
+  function nextStep() {
+    const recipe = recipesData.find(r => r.id === modalState.recipeId);
+    if (!recipe) return;
+    if (modalState.currentStep < recipe.steps.length - 1) { modalState.currentStep++; updateModalStep(); }
+    else closeModal();
+  }
+  function closeModal() { document.getElementById('cooking-modal').classList.add('hidden'); }
+  function openInstallModal() { document.getElementById('install-modal').classList.remove('hidden'); icons(); }
+  function closeInstallModal() { document.getElementById('install-modal').classList.add('hidden'); }
+
+  /* ---------- eventos y arranque ---------- */
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.classList && t.classList.contains('step-checkbox')) {
+      const key = t.dataset.rid + '_' + t.dataset.idx;
+      savedState.checkedSteps[key] = t.checked;
+      saveState();
+    } else if (t.classList && t.classList.contains('g-check')) {
+      savedState.checkedGrocery[t.dataset.gname] = t.checked;
+      saveState();
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closeInstallModal(); }
+  });
+
+  (function init() {
+    loadState();
+    const map = ['lunes', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+    selectedDay = map[new Date().getDay()] || 'lunes';
+    updateServingsUI(currentServings);
+    buildDayTabs();
+    selectDayCard(selectedDay);
+    buildDayFilters();
+    renderRecipes(recipesData);
+    renderGroceryList();
+    icons();
+  })();
+</script>
+
+</body>
+</html>
